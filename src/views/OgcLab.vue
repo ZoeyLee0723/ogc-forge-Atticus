@@ -1,9 +1,11 @@
 <template>
-  <div id="ol-map-container" class="map-container"></div>
+  <div id="ol-map-container" class="map-container">
+    <FeatureInfoPopup ref="featurePopup" />
+  </div>
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import Map from 'ol/Map'
 import View from 'ol/View'
 import { fromLonLat } from 'ol/proj'
@@ -11,14 +13,17 @@ import { createTdtVecLayer, createTdtVecAnnoLayer } from '@/utils/baseLayerSourc
 import { wfsApi } from '@/api/ogc/wfs'
 import { useLayerStore } from '@/stores/layerStore'
 import { useOlMap } from '@/composables/useOlMap'
+import FeatureInfoPopup from '@/components/FeatureInfoPopup.vue' // 新增：导入弹窗组件
 
 let mapInstance = null
 const layerStore = useLayerStore()
-const { addBusinessLayers, setupWatchers } = useOlMap()
+const featurePopup = ref(null) // 新增：弹窗组件引用
+const { addBusinessLayers, setupWatchers, addSelectInteraction } = useOlMap() // 新增：addSelectInteraction
 
 onMounted(async () => {
   initMap()
   setupWatchers()
+  addSelectInteraction(mapInstance, featurePopup) // 新增：初始化选择交互
   await loadAllLayers()
 })
 

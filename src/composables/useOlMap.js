@@ -4,6 +4,7 @@ import VectorSource from 'ol/source/Vector'
 import { GeoJSON } from 'ol/format'
 import { useLayerStore } from '@/stores/layerStore'
 import { getPointStyle, getLineStyle, getPolygonStyle } from '@/utils/featureStyles'
+import Select from 'ol/interaction/Select' // 新增：选择交互
 
 export function useOlMap() {
   const layerStore = useLayerStore()
@@ -70,6 +71,34 @@ export function useOlMap() {
       },
     )
   }
+  // 4. 添加选择交互（战役二核心）
+  function addSelectInteraction(map, featurePopup) {
+    const select = new Select({
+      layers: [pointLayer, lineLayer, polygonLayer], // 监听所有业务图层
+      style: (feature) => {
+        // 选中时高亮（可选）
+        return getPointStyle() // 这里用点样式举例，可根据类型调整
+      },
+    })
 
-  return { addBusinessLayers, setupWatchers, pointLayer, lineLayer, polygonLayer }
+    // 监听选择事件
+    select.on('select', (event) => {
+      const selectedFeatures = event.selected
+      if (selectedFeatures.length > 0) {
+        const feature = selectedFeatures[0] // 取第一个选中的要素
+        featurePopup.value.showFeaturePopup(feature) // 触发弹窗显示
+      }
+    })
+
+    map.addInteraction(select)
+  }
+
+  return {
+    addBusinessLayers,
+    setupWatchers,
+    pointLayer,
+    lineLayer,
+    polygonLayer,
+    addSelectInteraction,
+  }
 }
