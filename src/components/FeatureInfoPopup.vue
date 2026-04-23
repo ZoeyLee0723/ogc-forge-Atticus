@@ -3,6 +3,11 @@
     <div class="popup-header">
       <h3>要素属性</h3>
       <div class="header-actions">
+        <!-- 【新增】缓冲区分析按钮 -->
+        <button v-if="!isEditing" class="action-btn analysis-btn" @click="handleBufferAnalysis">
+          缓冲分析
+        </button>
+
         <!-- 非编辑状态：显示编辑和删除按钮 -->
         <button
           v-if="!isEditing && Object.keys(attrs).length > 0"
@@ -39,6 +44,16 @@
       </div>
       <div v-else class="no-attributes">该要素无业务属性</div>
     </div>
+
+    <!-- 【新增】缓冲区参数输入区域 -->
+    <div v-if="showBufferInput" class="buffer-input-area">
+      <div class="buffer-row">
+        <label>半径(米):</label>
+        <input type="number" v-model.number="bufferRadius" class="buffer-input" />
+        <button class="confirm-btn" @click="executeBuffer">确定</button>
+        <button class="cancel-small-btn" @click="showBufferInput = false">取消</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -46,8 +61,13 @@
 import { ref, inject } from 'vue'
 import { wfsApi } from '@/api/ogc/wfs'
 import { useOlMap } from '@/composables/useOlMap'
+// 【新增】引入分析逻辑
+import { useTurfAnalysis } from '@/composables/useTurfAnalysis'
 
 const { buildBatchUpdatePropertyXml, buildDeleteXml } = useOlMap()
+// 【重要】解构出 generateBuffer 方法
+const { generateBuffer } = useTurfAnalysis()
+
 // 【关键修复】拿到的是 ref，使用时需要加 .value
 const mapInstanceRef = inject('mapInstance')
 
@@ -57,9 +77,14 @@ const attrs = ref({})
 let currentFeature = null
 let originalAttrs = {}
 
+// 【新增】缓冲区分析相关状态
+const showBufferInput = ref(false)
+const bufferRadius = ref(2000)
+
 const handleClose = () => {
   showPopup.value = false
   isEditing.value = false
+  showBufferInput.value = false // 关闭时顺便关掉输入框
 }
 
 const handleCancel = () => {
@@ -94,6 +119,20 @@ const getLayerNameByFeature = (feature) => {
   if (geoType.includes('Line')) return 'string'
   if (geoType.includes('Polygon')) return 'polygon'
   return ''
+}
+
+// 【新增】点击“缓冲分析”按钮
+const handleBufferAnalysis = () => {
+  // 弹出输入框让用户确认半径
+  showBufferInput.value = true
+}
+
+// 【新增】执行分析
+const executeBuffer = () => {
+  if (!currentFeature) return
+  generateBuffer(currentFeature, bufferRadius.value, 'meters', mapInstanceRef.value)
+  showBufferInput.value = false
+  console.log(`已生成 ${bufferRadius.value} 米缓冲区`)
 }
 
 const handleSave = async () => {
@@ -132,13 +171,11 @@ const handleDelete = async () => {
     console.log('✅ [Delete] 成功:\n', result)
 
     // 【关键修复】加上 .value 获取真实 map 实例，实现“秒没”
-    // 【修复】遍历地图图层，找到该要素并移除，实现"秒没"
     mapInstanceRef.value
       .getLayers()
       .getArray()
       .forEach((layer) => {
         const source = layer.getSource()
-        // 只有矢量图层 才有 getFeatures 方法，底图没有
         if (source && typeof source.getFeatures === 'function') {
           if (source.getFeatures().includes(currentFeature)) {
             source.removeFeature(currentFeature)
@@ -313,5 +350,51 @@ defineExpose({ showFeaturePopup })
 }
 .popup-content::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* 【新增】缓冲区按钮样式 */
+.analysis-btn {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+.analysis-btn:hover {
+  background: #e1f3d8;
+}
+
+/* 【新增】缓冲区输入区域样式 */
+.buffer-input-area {
+  padding: 10px 16px;
+  background: #fdf6ec;
+  border-top: 1px solid #faecd8;
+}
+.buffer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.buffer-row label {
+  font-size: 12px;
+  color: #666;
+}
+.buffer-input {
+  width: 60px;
+  padding: 4px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+}
+.confirm-btn {
+  background: #67c23a;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.cancel-small-btn {
+  background: transparent;
+  border: 1px solid #dcdfe6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 </style>
