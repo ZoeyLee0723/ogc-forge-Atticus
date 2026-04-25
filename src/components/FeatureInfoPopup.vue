@@ -3,12 +3,27 @@
     <div class="popup-header">
       <h3>要素属性</h3>
       <div class="header-actions">
-        <!-- 【修改】拆分为两种缓冲分析按钮 -->
-        <button v-if="!isEditing" class="action-btn analysis-btn turf-btn" @click="handleBufferAnalysis('turf')">
+        <!-- 【修改】拆分为三种缓冲分析按钮 -->
+        <button
+          v-if="!isEditing"
+          class="action-btn analysis-btn turf-btn"
+          @click="handleBufferAnalysis('turf')"
+        >
           Turf缓冲
         </button>
-        <button v-if="!isEditing" class="action-btn analysis-btn wps-btn" @click="handleBufferAnalysis('wps')">
+        <button
+          v-if="!isEditing"
+          class="action-btn analysis-btn wps-btn"
+          @click="handleBufferAnalysis('wps')"
+        >
           WPS缓冲
+        </button>
+        <button
+          v-if="!isEditing"
+          class="action-btn analysis-btn postgis-btn"
+          @click="handleBufferAnalysis('postgis')"
+        >
+          数据库缓冲
         </button>
 
         <!-- 非编辑状态：显示编辑和删除按钮 -->
@@ -56,7 +71,16 @@
         <button class="confirm-btn" @click="executeBuffer">确定</button>
         <button class="cancel-small-btn" @click="showBufferInput = false">取消</button>
       </div>
-      <div class="buffer-tip">当前模式: {{ currentAnalysisType === 'turf' ? '前端Turf计算' : 'GeoServer WPS计算' }}</div>
+      <div class="buffer-tip">
+        当前模式:
+        {{
+          currentAnalysisType === 'turf'
+            ? '前端Turf计算'
+            : currentAnalysisType === 'wps'
+              ? 'GeoServer WPS计算'
+              : 'PostGIS 数据库计算'
+        }}
+      </div>
     </div>
   </div>
 </template>
@@ -65,13 +89,15 @@
 import { ref, inject } from 'vue'
 import { wfsApi } from '@/api/ogc/wfs'
 import { useOlMap } from '@/composables/useOlMap'
-// 引入两种分析逻辑
+// 引入三种分析逻辑
 import { useTurfAnalysis } from '@/composables/useTurfAnalysis'
 import { useWpsAnalysis } from '@/composables/useWpsAnalysis'
+import { usePostgisAnalysis } from '@/composables/usePostgisAnalysis'
 
 const { buildBatchUpdatePropertyXml, buildDeleteXml } = useOlMap()
 const { generateBuffer } = useTurfAnalysis()
-const { generateWpsBuffer } = useWpsAnalysis() // 引入 WPS 缓冲方法
+const { generateWpsBuffer } = useWpsAnalysis()
+const { generatePostgisBuffer } = usePostgisAnalysis() // 引入 PostGIS 缓冲方法
 
 const mapInstanceRef = inject('mapInstance')
 
@@ -84,7 +110,7 @@ let originalAttrs = {}
 // 缓冲区分析相关状态
 const showBufferInput = ref(false)
 const bufferRadius = ref(2000)
-const currentAnalysisType = ref('turf') // 记录当前选择的分析模式
+const currentAnalysisType = ref('turf') // 记录当前选择的分析模式: turf / wps / postgis
 
 const handleClose = () => {
   showPopup.value = false
@@ -131,7 +157,7 @@ const handleBufferAnalysis = (type) => {
   showBufferInput.value = true
 }
 
-// 执行分析（加入 WPS 逻辑和异步处理）
+// 执行分析（加入 WPS 和 PostGIS 逻辑和异步处理）
 const executeBuffer = async () => {
   if (!currentFeature) return
 
@@ -143,10 +169,14 @@ const executeBuffer = async () => {
       // Turf 前端计算
       generateBuffer(currentFeature, radius, 'meters', map)
       console.log(`✅ [Turf] 已生成 ${radius} 米缓冲区`)
-    } else {
+    } else if (currentAnalysisType.value === 'wps') {
       // WPS 服务端计算
       await generateWpsBuffer(currentFeature, radius, map)
       console.log(`✅ [WPS] 已生成 ${radius} 米缓冲区`)
+    } else if (currentAnalysisType.value === 'postgis') {
+      // PostGIS 数据库计算
+      await generatePostgisBuffer(currentFeature, radius, map)
+      console.log(`✅ [PostGIS] 已生成 ${radius} 米缓冲区`)
     }
     showBufferInput.value = false // 成功后关闭输入框
   } catch (error) {
@@ -217,7 +247,7 @@ defineExpose({ showFeaturePopup })
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 340px; /* 稍微加宽以容纳两个按钮 */
+  width: 380px; /* 稍微加宽以容纳三个按钮 */
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
@@ -243,37 +273,68 @@ defineExpose({ showFeaturePopup })
 
 .header-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px; /* 按钮增多，稍微缩小间距 */
   align-items: center;
+  flex-wrap: wrap; /* 允许换行防止撑爆 */
 }
 
 .action-btn {
   border: none;
   border-radius: 4px;
-  padding: 4px 10px;
+  padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
   font-weight: 500;
 }
 
-.edit-btn { background: #e6f7ff; color: #1890ff; }
-.edit-btn:hover { background: #bae7ff; }
+.edit-btn {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+.edit-btn:hover {
+  background: #bae7ff;
+}
 
-.save-btn { background: #f6ffed; color: #52c41a; }
-.save-btn:hover { background: #d9f7be; }
+.save-btn {
+  background: #f6ffed;
+  color: #52c41a;
+}
+.save-btn:hover {
+  background: #d9f7be;
+}
 
-.cancel-btn { background: #fff1f0; color: #ff4d4f; }
-.cancel-btn:hover { background: #ffccc7; }
+.cancel-btn {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+.cancel-btn:hover {
+  background: #ffccc7;
+}
 
-.delete-btn { background: #fff1f0; color: #ff4d4f; }
-.delete-btn:hover { background: #ffccc7; }
+.delete-btn {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+.delete-btn:hover {
+  background: #ffccc7;
+}
 
 .close-btn {
-  background: none; border: none; font-size: 18px; color: #909399;
-  cursor: pointer; padding: 0; width: 20px; height: 20px;
-  display: flex; align-items: center; justify-content: center;
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: #909399;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.close-btn:hover { color: #606266; }
+.close-btn:hover {
+  color: #606266;
+}
 
 .popup-content {
   padding: 16px;
@@ -287,32 +348,83 @@ defineExpose({ showFeaturePopup })
   border-bottom: 1px solid #f0f0f0;
 }
 .attribute-item:last-child {
-  margin-bottom: 0; padding-bottom: 0; border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
-.attribute-label { font-size: 12px; font-weight: 500; color: #909399; margin-bottom: 4px; }
-.attribute-value { font-size: 13px; color: #303133; word-break: break-all; }
+.attribute-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #909399;
+  margin-bottom: 4px;
+}
+.attribute-value {
+  font-size: 13px;
+  color: #303133;
+  word-break: break-all;
+}
 
 .attribute-input {
-  width: 100%; box-sizing: border-box; padding: 6px 8px;
-  border: 1px solid #dcdfe6; border-radius: 4px; font-size: 13px;
-  color: #303133; outline: none; transition: border 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #303133;
+  outline: none;
+  transition: border 0.2s;
 }
-.attribute-input:focus { border-color: #409eff; }
+.attribute-input:focus {
+  border-color: #409eff;
+}
 
-.no-attributes { text-align: center; color: #999; padding: 20px 0; }
+.no-attributes {
+  text-align: center;
+  color: #999;
+  padding: 20px 0;
+}
 
-.popup-content::-webkit-scrollbar { width: 6px; }
-.popup-content::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
-.popup-content::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
-.popup-content::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+.popup-content::-webkit-scrollbar {
+  width: 6px;
+}
+.popup-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+.popup-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+.popup-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
 
 /* 缓冲区按钮样式区分 */
-.turf-btn { background: #f0f9eb; color: #67c23a; }
-.turf-btn:hover { background: #e1f3d8; }
+.turf-btn {
+  background: #f0f9eb;
+  color: #67c23a;
+}
+.turf-btn:hover {
+  background: #e1f3d8;
+}
 
-.wps-btn { background: #fdf6ec; color: #e6a23c; } /* 橙色系代表 WPS 服务端 */
-.wps-btn:hover { background: #faecd8; }
+.wps-btn {
+  background: #fdf6ec;
+  color: #e6a23c;
+} /* 橙色系代表 WPS 服务端 */
+.wps-btn:hover {
+  background: #faecd8;
+}
+
+.postgis-btn {
+  background: #f3e8ff;
+  color: #8a2be2;
+} /* 紫色系代表 PostGIS 数据库 */
+.postgis-btn:hover {
+  background: #e6ccff;
+}
 
 /* 缓冲区输入区域样式 */
 .buffer-input-area {
@@ -325,17 +437,30 @@ defineExpose({ showFeaturePopup })
   align-items: center;
   gap: 8px;
 }
-.buffer-row label { font-size: 12px; color: #666; }
+.buffer-row label {
+  font-size: 12px;
+  color: #666;
+}
 .buffer-input {
-  width: 60px; padding: 4px; border: 1px solid #dcdfe6; border-radius: 4px;
+  width: 60px;
+  padding: 4px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
 }
 .confirm-btn {
-  background: #67c23a; color: white; border: none; padding: 4px 8px;
-  border-radius: 4px; cursor: pointer;
+  background: #67c23a;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 .cancel-small-btn {
-  background: transparent; border: 1px solid #dcdfe6; padding: 4px 8px;
-  border-radius: 4px; cursor: pointer;
+  background: transparent;
+  border: 1px solid #dcdfe6;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
 }
 .buffer-tip {
   margin-top: 6px;
