@@ -3,101 +3,89 @@
     <div class="popup-header">
       <h3>要素属性</h3>
       <div class="header-actions">
-        <!-- 【修改】拆分为三种缓冲分析按钮 -->
-        <button
-          v-if="!isEditing"
-          class="action-btn analysis-btn turf-btn"
-          @click="handleBufferAnalysis('turf')"
-        >
-          Turf缓冲
-        </button>
-        <button
-          v-if="!isEditing"
-          class="action-btn analysis-btn wps-btn"
-          @click="handleBufferAnalysis('wps')"
-        >
-          WPS缓冲
-        </button>
-        <button
-          v-if="!isEditing"
-          class="action-btn analysis-btn postgis-btn"
-          @click="handleBufferAnalysis('postgis')"
-        >
-          数据库缓冲
-        </button>
+        <!-- 分析功能：收纳进下拉菜单 -->
+        <div v-if="!isEditing" class="dropdown-wrapper">
+          <button class="action-btn base-btn">缓冲分析 ▾</button>
+          <div class="dropdown-menu">
+            <div class="dropdown-item turf" @click="handleBufferAnalysis('turf')">
+              <span class="dot turf-dot"></span>Turf 前端计算
+            </div>
+            <div class="dropdown-item wps" @click="handleBufferAnalysis('wps')">
+              <span class="dot wps-dot"></span>WPS 服务计算
+            </div>
+            <div class="dropdown-item postgis" @click="handleBufferAnalysis('postgis')">
+              <span class="dot postgis-dot"></span>PostGIS 数据库计算
+            </div>
+          </div>
+        </div>
 
-        <!-- 非编辑状态：显示编辑和删除按钮 -->
-        <button
-          v-if="!isEditing && Object.keys(attrs).length > 0"
-          class="action-btn edit-btn"
-          @click="isEditing = true"
-        >
-          编辑
-        </button>
-        <button
-          v-if="!isEditing && Object.keys(attrs).length > 0"
-          class="action-btn delete-btn"
-          @click="handleDelete"
-        >
-          删除
-        </button>
+        <!-- 基础操作按钮 -->
+        <button v-if="!isEditing && hasAttrs" class="action-btn" @click="isEditing = true">编辑</button>
+        <button v-if="!isEditing && hasAttrs" class="action-btn danger-text-btn" @click="handleDelete">删除</button>
 
-        <!-- 编辑状态：显示保存和取消按钮 -->
-        <button v-if="isEditing" class="action-btn save-btn" @click="handleSave">保存</button>
-        <button v-if="isEditing" class="action-btn cancel-btn" @click="handleCancel">取消</button>
+        <!-- 编辑状态按钮 -->
+        <button v-if="isEditing" class="action-btn success-btn" @click="handleSave">保存</button>
+        <button v-if="isEditing" class="action-btn" @click="handleCancel">取消</button>
 
+        <!-- 分割线 -->
+        <div v-if="hasAttrs || isEditing" class="action-divider"></div>
+
+        <!-- 关闭按钮 -->
         <button class="close-btn" @click="handleClose">×</button>
       </div>
     </div>
 
     <div class="popup-content">
-      <div v-if="Object.keys(attrs).length > 0">
+      <div v-if="hasAttrs">
         <div v-for="(value, key) in attrs" :key="key" class="attribute-item">
           <div class="attribute-label">{{ key }}</div>
-          <!-- 展示模式 -->
           <div v-if="!isEditing" class="attribute-value">{{ value }}</div>
-          <!-- 编辑模式 -->
           <input v-else class="attribute-input" v-model="attrs[key]" />
         </div>
       </div>
       <div v-else class="no-attributes">该要素无业务属性</div>
     </div>
 
-    <!-- 缓冲区参数输入区域 -->
+    <!-- 缓冲区参数输入区域 (美化版) -->
     <div v-if="showBufferInput" class="buffer-input-area">
-      <div class="buffer-row">
-        <label>半径(米):</label>
-        <input type="number" v-model.number="bufferRadius" class="buffer-input" />
-        <button class="confirm-btn" @click="executeBuffer">确定</button>
-        <button class="cancel-small-btn" @click="showBufferInput = false">取消</button>
+      <div class="buffer-form">
+        <div class="input-group">
+          <input
+            type="number"
+            v-model.number="bufferRadius"
+            class="buffer-input"
+            placeholder="输入半径"
+            autofocus
+          />
+          <span class="input-suffix">米</span>
+        </div>
+        <div class="buffer-actions">
+          <button class="confirm-btn" @click="executeBuffer">确定执行</button>
+          <button class="cancel-small-btn" @click="showBufferInput = false">取消</button>
+        </div>
       </div>
       <div class="buffer-tip">
-        当前模式:
-        {{
-          currentAnalysisType === 'turf'
-            ? '前端Turf计算'
-            : currentAnalysisType === 'wps'
-              ? 'GeoServer WPS计算'
-              : 'PostGIS 数据库计算'
-        }}
+        当前模式：
+        <span :class="`tag tag-${currentAnalysisType}`">
+          {{ currentAnalysisType === 'turf' ? 'Turf前端' : currentAnalysisType === 'wps' ? 'WPS服务' : 'PostGIS数据库' }}
+        </span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, inject } from 'vue'
+import { ref, inject, computed } from 'vue'
 import { wfsApi } from '@/api/ogc/wfs'
 import { useOlMap } from '@/composables/useOlMap'
-// 引入三种分析逻辑
 import { useTurfAnalysis } from '@/composables/useTurfAnalysis'
 import { useWpsAnalysis } from '@/composables/useWpsAnalysis'
 import { usePostgisAnalysis } from '@/composables/usePostgisAnalysis'
 
-const { buildBatchUpdatePropertyXml, buildDeleteXml } = useOlMap()
+const { buildBatchUpdatePropertyXml, buildDeleteXml, refreshLayers } = useOlMap()
 const { generateBuffer } = useTurfAnalysis()
 const { generateWpsBuffer } = useWpsAnalysis()
-const { generatePostgisBuffer } = usePostgisAnalysis() // 引入 PostGIS 缓冲方法
+const { generatePostgisBuffer } = usePostgisAnalysis()
 
 const mapInstanceRef = inject('mapInstance')
 
@@ -107,10 +95,13 @@ const attrs = ref({})
 let currentFeature = null
 let originalAttrs = {}
 
+// 计算属性简化模板判断
+const hasAttrs = computed(() => Object.keys(attrs.value).length > 0)
+
 // 缓冲区分析相关状态
 const showBufferInput = ref(false)
 const bufferRadius = ref(2000)
-const currentAnalysisType = ref('turf') // 记录当前选择的分析模式: turf / wps / postgis
+const currentAnalysisType = ref('turf')
 
 const handleClose = () => {
   showPopup.value = false
@@ -129,7 +120,6 @@ const showFeaturePopup = (feature) => {
 
   const properties = feature.getProperties()
   const filtered = {}
-
   for (const [key, value] of Object.entries(properties)) {
     if (key !== 'geometry' && !key.startsWith('_') && key !== 'id') {
       filtered[key] = typeof value === 'object' ? JSON.stringify(value, null, 2) : value
@@ -142,7 +132,6 @@ const showFeaturePopup = (feature) => {
   showPopup.value = true
 }
 
-// 提取公共逻辑：通过要素获取图层名
 const getLayerNameByFeature = (feature) => {
   const geoType = feature.getGeometry().getType()
   if (geoType.includes('Point')) return 'point'
@@ -151,34 +140,25 @@ const getLayerNameByFeature = (feature) => {
   return ''
 }
 
-// 点击缓冲按钮，记录类型并弹出输入框
 const handleBufferAnalysis = (type) => {
   currentAnalysisType.value = type
   showBufferInput.value = true
 }
 
-// 执行分析（加入 WPS 和 PostGIS 逻辑和异步处理）
 const executeBuffer = async () => {
   if (!currentFeature) return
-
   const map = mapInstanceRef.value
   const radius = bufferRadius.value
 
   try {
     if (currentAnalysisType.value === 'turf') {
-      // Turf 前端计算
       generateBuffer(currentFeature, radius, 'meters', map)
-      console.log(`✅ [Turf] 已生成 ${radius} 米缓冲区`)
     } else if (currentAnalysisType.value === 'wps') {
-      // WPS 服务端计算
       await generateWpsBuffer(currentFeature, radius, map)
-      console.log(`✅ [WPS] 已生成 ${radius} 米缓冲区`)
     } else if (currentAnalysisType.value === 'postgis') {
-      // PostGIS 数据库计算
       await generatePostgisBuffer(currentFeature, radius, map)
-      console.log(`✅ [PostGIS] 已生成 ${radius} 米缓冲区`)
     }
-    showBufferInput.value = false // 成功后关闭输入框
+    showBufferInput.value = false
   } catch (error) {
     console.error('缓冲区分析失败:', error)
     alert('缓冲区分析失败，请查看控制台日志')
@@ -191,15 +171,12 @@ const handleSave = async () => {
   if (!fid) return alert('修改失败：找不到要素 FID')
 
   const layerName = getLayerNameByFeature(currentFeature)
-
   try {
     const xmlString = buildBatchUpdatePropertyXml(layerName, fid, attrs.value)
-    console.log('📝 [Update Props] 发送 XML:\n', xmlString)
-    const result = await wfsApi.postTransaction(xmlString)
-    console.log('✅ [Update Props] 成功:\n', result)
-
+    await wfsApi.postTransaction(xmlString)
     isEditing.value = false
     originalAttrs = { ...attrs.value }
+    refreshLayers()
     alert('属性修改成功！')
   } catch (error) {
     console.error('❌ [Update Props] 失败:', error)
@@ -216,23 +193,15 @@ const handleDelete = async () => {
 
   try {
     const xmlString = buildDeleteXml(layerName, fid)
-    console.log('🗑️ [Delete] 发送 XML:\n', xmlString)
-    const result = await wfsApi.postTransaction(xmlString)
-    console.log('✅ [Delete] 成功:\n', result)
-
-    mapInstanceRef.value
-      .getLayers()
-      .getArray()
-      .forEach((layer) => {
-        const source = layer.getSource()
-        if (source && typeof source.getFeatures === 'function') {
-          if (source.getFeatures().includes(currentFeature)) {
-            source.removeFeature(currentFeature)
-          }
-        }
-      })
-
+    await wfsApi.postTransaction(xmlString)
+    mapInstanceRef.value.getLayers().getArray().forEach((layer) => {
+      const source = layer.getSource()
+      if (source && typeof source.getFeatures === 'function' && source.getFeatures().includes(currentFeature)) {
+        source.removeFeature(currentFeature)
+      }
+    })
     showPopup.value = false
+    refreshLayers()
   } catch (error) {
     console.error('❌ [Delete] 失败:', error)
     alert('删除失败，请查看控制台')
@@ -243,109 +212,159 @@ defineExpose({ showFeaturePopup })
 </script>
 
 <style scoped>
+/* 弹窗主体 */
 .feature-info-popup {
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 380px; /* 稍微加宽以容纳三个按钮 */
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  width: 400px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
   z-index: 1000;
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+/* 头部布局 */
 .popup-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  background: #f5f7fa;
-  border-bottom: 1px solid #e4e7ed;
+  padding: 14px 20px;
+  background: #fafbfc;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .popup-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
-  color: #303133;
+  color: #1f2937;
 }
 
 .header-actions {
   display: flex;
-  gap: 6px; /* 按钮增多，稍微缩小间距 */
   align-items: center;
-  flex-wrap: wrap; /* 允许换行防止撑爆 */
+  gap: 8px;
 }
 
+/* 统一按钮基础样式 */
 .action-btn {
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 5px 12px;
   font-size: 12px;
   cursor: pointer;
   font-weight: 500;
+  color: #4b5563;
+  background: #fff;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.action-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
 }
 
-.edit-btn {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-.edit-btn:hover {
-  background: #bae7ff;
+.danger-text-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
 }
 
-.save-btn {
-  background: #f6ffed;
-  color: #52c41a;
+.success-btn {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
 }
-.save-btn:hover {
-  background: #d9f7be;
-}
-
-.cancel-btn {
-  background: #fff1f0;
-  color: #ff4d4f;
-}
-.cancel-btn:hover {
-  background: #ffccc7;
+.success-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
 }
 
-.delete-btn {
-  background: #fff1f0;
-  color: #ff4d4f;
-}
-.delete-btn:hover {
-  background: #ffccc7;
+.action-divider {
+  width: 1px;
+  height: 20px;
+  background: #e5e7eb;
+  margin: 0 4px;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 18px;
-  color: #909399;
+  font-size: 20px;
+  color: #9ca3af;
   cursor: pointer;
-  padding: 0;
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 .close-btn:hover {
-  color: #606266;
+  background: #f3f4f6;
+  color: #374151;
 }
 
+/* 下拉菜单样式 */
+.dropdown-wrapper {
+  position: relative;
+}
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
+  border: 1px solid #f0f0f0;
+  padding: 6px;
+  min-width: 180px;
+  z-index: 10;
+}
+.dropdown-wrapper:hover .dropdown-menu {
+  display: block;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #374151;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dropdown-item:hover {
+  background: #f3f4f6;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.turf-dot { background: #10b981; }
+.wps-dot { background: #f59e0b; }
+.postgis-dot { background: #8b5cf6; }
+
+/* 内容区域 */
 .popup-content {
-  padding: 16px;
-  max-height: 400px;
+  padding: 16px 20px;
+  max-height: 350px;
   overflow-y: auto;
 }
 
 .attribute-item {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f9fafb;
 }
 .attribute-item:last-child {
   margin-bottom: 0;
@@ -356,115 +375,128 @@ defineExpose({ showFeaturePopup })
 .attribute-label {
   font-size: 12px;
   font-weight: 500;
-  color: #909399;
+  color: #9ca3af;
   margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
+
 .attribute-value {
   font-size: 13px;
-  color: #303133;
+  color: #1f2937;
   word-break: break-all;
+  line-height: 1.5;
 }
 
 .attribute-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 6px 8px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  padding: 7px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
   font-size: 13px;
-  color: #303133;
+  color: #1f2937;
   outline: none;
   transition: border 0.2s;
+  background: #fff;
 }
 .attribute-input:focus {
-  border-color: #409eff;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .no-attributes {
   text-align: center;
-  color: #999;
-  padding: 20px 0;
+  color: #9ca3af;
+  padding: 30px 0;
+  font-size: 13px;
 }
 
-.popup-content::-webkit-scrollbar {
-  width: 6px;
-}
-.popup-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-.popup-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-.popup-content::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
+/* 滚动条 */
+.popup-content::-webkit-scrollbar { width: 4px; }
+.popup-content::-webkit-scrollbar-track { background: transparent; }
+.popup-content::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
 
-/* 缓冲区按钮样式区分 */
-.turf-btn {
-  background: #f0f9eb;
-  color: #67c23a;
-}
-.turf-btn:hover {
-  background: #e1f3d8;
-}
-
-.wps-btn {
-  background: #fdf6ec;
-  color: #e6a23c;
-} /* 橙色系代表 WPS 服务端 */
-.wps-btn:hover {
-  background: #faecd8;
-}
-
-.postgis-btn {
-  background: #f3e8ff;
-  color: #8a2be2;
-} /* 紫色系代表 PostGIS 数据库 */
-.postgis-btn:hover {
-  background: #e6ccff;
-}
-
-/* 缓冲区输入区域样式 */
+/* 缓冲区输入面板 */
 .buffer-input-area {
-  padding: 10px 16px;
-  background: #fdf6ec;
-  border-top: 1px solid #faecd8;
+  padding: 16px 20px;
+  background: #fafbfc;
+  border-top: 1px solid #f0f0f0;
 }
-.buffer-row {
+.buffer-form {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 }
-.buffer-row label {
-  font-size: 12px;
-  color: #666;
+.input-group {
+  position: relative;
+  flex: 1;
 }
 .buffer-input {
-  width: 60px;
-  padding: 4px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
+  width: 100%;
+  padding: 7px 35px 7px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.2s;
+}
+.buffer-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.input-suffix {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: #9ca3af;
+}
+.buffer-actions {
+  display: flex;
+  gap: 8px;
 }
 .confirm-btn {
-  background: #67c23a;
+  padding: 7px 16px;
+  background: #3b82f6;
   color: white;
   border: none;
-  padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background 0.2s;
 }
+.confirm-btn:hover { background: #2563eb; }
 .cancel-small-btn {
-  background: transparent;
-  border: 1px solid #dcdfe6;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 7px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
   cursor: pointer;
+  color: #4b5563;
+  transition: all 0.2s;
 }
+.cancel-small-btn:hover { border-color: #d1d5db; background: #f9fafb; }
+
 .buffer-tip {
-  margin-top: 6px;
-  font-size: 11px;
-  color: #909399;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
+.tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.tag-turf { background: #d1fae5; color: #065f46; }
+.tag-wps { background: #fef3c7; color: #92400e; }
+.tag-postgis { background: #ede9fe; color: #5b21b6; }
 </style>

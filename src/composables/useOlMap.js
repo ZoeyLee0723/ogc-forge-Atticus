@@ -24,7 +24,7 @@ export function useOlMap() {
 
   const drawTargetMap = {
     Point: { source: pointLayer.getSource(), layerName: 'point' },
-    LineString: { source: lineLayer.getSource(), layerName: 'string' },
+    LineString: { source: lineLayer.getSource(), layerName: 'line' },
     Polygon: { source: polygonLayer.getSource(), layerName: 'polygon' },
   }
 
@@ -188,6 +188,7 @@ export function useOlMap() {
         console.log('🚀 [Insert] 发送 XML:\n', xmlString)
         const result = await wfsApi.postTransaction(xmlString)
         console.log('✅ [Insert] 成功:\n', result)
+        refreshLayers() // 刷新图层
       } catch (error) {
         console.error('❌ [Insert] 失败:', error)
       }
@@ -236,7 +237,7 @@ export function useOlMap() {
 
       let layerName = ''
       if (pointLayer.getSource().hasFeature(feature)) layerName = 'point'
-      else if (lineLayer.getSource().hasFeature(feature)) layerName = 'string'
+      else if (lineLayer.getSource().hasFeature(feature)) layerName = 'line'
       else if (polygonLayer.getSource().hasFeature(feature)) layerName = 'polygon'
 
       const clonedFeature = feature.clone()
@@ -247,6 +248,7 @@ export function useOlMap() {
         console.log('🛠️ [Update] 发送 XML:\n', xmlString)
         const result = await wfsApi.postTransaction(xmlString)
         console.log('✅ [Update] 成功:\n', result)
+        refreshLayers() // 刷新图层
       } catch (error) {
         console.error('❌ [Update] 失败:', error)
       }
@@ -290,7 +292,7 @@ export function useOlMap() {
   </wfs:Update>
 </wfs:Transaction>`
   }
-// ==================== 11. 拼装删除 XML (新增) ====================
+  // ==================== 11. 拼装删除 XML (新增) ====================
   function buildDeleteXml(layerName, fid) {
     return `<?xml version="1.0" encoding="UTF-8"?>
 <wfs:Transaction service="WFS" version="1.0.0"
@@ -302,6 +304,43 @@ export function useOlMap() {
   </wfs:Delete>
 </wfs:Transaction>`
   }
+  // ==================== 12. 刷新图层数据 ====================
+  function refreshLayers() {
+    // 这里可以添加从服务器重新加载数据的逻辑
+    // 目前先实现图层重绘
+    console.log('🔄 刷新图层数据')
+
+    // 重新应用样式，确保所有要素都正确显示
+    const layers = [pointLayer, lineLayer, polygonLayer]
+    layers.forEach((layer) => {
+      if (layer) {
+        const source = layer.getSource()
+        if (source) {
+          const features = source.getFeatures()
+          source.clear()
+          source.addFeatures(features)
+        }
+      }
+    })
+  }
+
+  // ==================== 13. 控制图层显示/隐藏 ====================
+  function setLayerVisibility(layerName, visible) {
+    switch (layerName) {
+      case 'point':
+        pointLayer.setVisible(visible)
+        break
+      case 'line':
+        lineLayer.setVisible(visible)
+        break
+      case 'polygon':
+        polygonLayer.setVisible(visible)
+        break
+      default:
+        console.warn(`未知图层: ${layerName}`)
+    }
+  }
+
   return {
     addBusinessLayers,
     setupWatchers,
@@ -315,5 +354,7 @@ export function useOlMap() {
     deactivateModify,
     buildBatchUpdatePropertyXml, // 【新增】暴露属性修改方法
     buildDeleteXml, // 【新增】暴露删除方法
+    refreshLayers, // 【新增】暴露刷新图层方法
+    setLayerVisibility, // 【新增】暴露设置图层可见性方法
   }
 }
