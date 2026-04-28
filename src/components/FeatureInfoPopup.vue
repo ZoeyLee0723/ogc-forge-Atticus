@@ -3,25 +3,30 @@
     <div class="popup-header">
       <h3>要素属性</h3>
       <div class="header-actions">
-        <!-- 分析功能：收纳进下拉菜单 -->
-        <div v-if="!isEditing" class="dropdown-wrapper">
-          <button class="action-btn base-btn">缓冲分析 ▾</button>
-          <div class="dropdown-menu">
-            <div class="dropdown-item turf" @click="handleBufferAnalysis('turf')">
-              <span class="dot turf-dot"></span>Turf 前端计算
-            </div>
-            <div class="dropdown-item wps" @click="handleBufferAnalysis('wps')">
-              <span class="dot wps-dot"></span>WPS 服务计算
-            </div>
-            <div class="dropdown-item postgis" @click="handleBufferAnalysis('postgis')">
-              <span class="dot postgis-dot"></span>PostGIS 数据库计算
-            </div>
-          </div>
+        <!-- 分析功能：直接显示三个按钮 -->
+        <div v-if="!isEditing" class="analysis-buttons">
+          <button class="analysis-btn turf-btn" @click="handleBufferAnalysis('turf')">
+            <span class="dot turf-dot"></span>Turf 缓冲
+          </button>
+          <button class="analysis-btn wps-btn" @click="handleBufferAnalysis('wps')">
+            <span class="dot wps-dot"></span>WPS 缓冲
+          </button>
+          <button class="analysis-btn postgis-btn" @click="handleBufferAnalysis('postgis')">
+            <span class="dot postgis-dot"></span>PostGIS 缓冲
+          </button>
         </div>
 
         <!-- 基础操作按钮 -->
-        <button v-if="!isEditing && hasAttrs" class="action-btn" @click="isEditing = true">编辑</button>
-        <button v-if="!isEditing && hasAttrs" class="action-btn danger-text-btn" @click="handleDelete">删除</button>
+        <button v-if="!isEditing && hasAttrs" class="action-btn" @click="isEditing = true">
+          编辑
+        </button>
+        <button
+          v-if="!isEditing && hasAttrs"
+          class="action-btn danger-text-btn"
+          @click="handleDelete"
+        >
+          删除
+        </button>
 
         <!-- 编辑状态按钮 -->
         <button v-if="isEditing" class="action-btn success-btn" @click="handleSave">保存</button>
@@ -67,7 +72,13 @@
       <div class="buffer-tip">
         当前模式：
         <span :class="`tag tag-${currentAnalysisType}`">
-          {{ currentAnalysisType === 'turf' ? 'Turf前端' : currentAnalysisType === 'wps' ? 'WPS服务' : 'PostGIS数据库' }}
+          {{
+            currentAnalysisType === 'turf'
+              ? 'Turf前端'
+              : currentAnalysisType === 'wps'
+                ? 'WPS服务'
+                : 'PostGIS数据库'
+          }}
         </span>
       </div>
     </div>
@@ -194,12 +205,19 @@ const handleDelete = async () => {
   try {
     const xmlString = buildDeleteXml(layerName, fid)
     await wfsApi.postTransaction(xmlString)
-    mapInstanceRef.value.getLayers().getArray().forEach((layer) => {
-      const source = layer.getSource()
-      if (source && typeof source.getFeatures === 'function' && source.getFeatures().includes(currentFeature)) {
-        source.removeFeature(currentFeature)
-      }
-    })
+    mapInstanceRef.value
+      .getLayers()
+      .getArray()
+      .forEach((layer) => {
+        const source = layer.getSource()
+        if (
+          source &&
+          typeof source.getFeatures === 'function' &&
+          source.getFeatures().includes(currentFeature)
+        ) {
+          source.removeFeature(currentFeature)
+        }
+      })
     showPopup.value = false
     refreshLayers()
   } catch (error) {
@@ -217,7 +235,7 @@ defineExpose({ showFeaturePopup })
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 400px;
+  width: 550px;
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
@@ -311,48 +329,59 @@ defineExpose({ showFeaturePopup })
   color: #374151;
 }
 
-/* 下拉菜单样式 */
-.dropdown-wrapper {
-  position: relative;
-}
-.dropdown-menu {
-  display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.12);
-  border: 1px solid #f0f0f0;
-  padding: 6px;
-  min-width: 180px;
-  z-index: 10;
-}
-.dropdown-wrapper:hover .dropdown-menu {
-  display: block;
-}
-.dropdown-item {
+/* 分析按钮样式 */
+.analysis-buttons {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: 13px;
-  color: #374151;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s;
+  gap: 6px;
 }
-.dropdown-item:hover {
-  background: #f3f4f6;
+.analysis-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.analysis-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+}
+.turf-btn:hover {
+  border-color: #10b981;
+  color: #065f46;
+  background: #d1fae5;
+}
+.wps-btn:hover {
+  border-color: #f59e0b;
+  color: #92400e;
+  background: #fef3c7;
+}
+.postgis-btn:hover {
+  border-color: #8b5cf6;
+  color: #5b21b6;
+  background: #ede9fe;
 }
 .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
-.turf-dot { background: #10b981; }
-.wps-dot { background: #f59e0b; }
-.postgis-dot { background: #8b5cf6; }
+.turf-dot {
+  background: #10b981;
+}
+.wps-dot {
+  background: #f59e0b;
+}
+.postgis-dot {
+  background: #8b5cf6;
+}
 
 /* 内容区域 */
 .popup-content {
@@ -413,9 +442,16 @@ defineExpose({ showFeaturePopup })
 }
 
 /* 滚动条 */
-.popup-content::-webkit-scrollbar { width: 4px; }
-.popup-content::-webkit-scrollbar-track { background: transparent; }
-.popup-content::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+.popup-content::-webkit-scrollbar {
+  width: 4px;
+}
+.popup-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.popup-content::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
 
 /* 缓冲区输入面板 */
 .buffer-input-area {
@@ -469,7 +505,9 @@ defineExpose({ showFeaturePopup })
   cursor: pointer;
   transition: background 0.2s;
 }
-.confirm-btn:hover { background: #2563eb; }
+.confirm-btn:hover {
+  background: #2563eb;
+}
 .cancel-small-btn {
   padding: 7px 12px;
   background: white;
@@ -480,7 +518,10 @@ defineExpose({ showFeaturePopup })
   color: #4b5563;
   transition: all 0.2s;
 }
-.cancel-small-btn:hover { border-color: #d1d5db; background: #f9fafb; }
+.cancel-small-btn:hover {
+  border-color: #d1d5db;
+  background: #f9fafb;
+}
 
 .buffer-tip {
   margin-top: 10px;
@@ -496,7 +537,16 @@ defineExpose({ showFeaturePopup })
   font-size: 11px;
   font-weight: 600;
 }
-.tag-turf { background: #d1fae5; color: #065f46; }
-.tag-wps { background: #fef3c7; color: #92400e; }
-.tag-postgis { background: #ede9fe; color: #5b21b6; }
+.tag-turf {
+  background: #d1fae5;
+  color: #065f46;
+}
+.tag-wps {
+  background: #fef3c7;
+  color: #92400e;
+}
+.tag-postgis {
+  background: #ede9fe;
+  color: #5b21b6;
+}
 </style>
